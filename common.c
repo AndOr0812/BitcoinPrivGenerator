@@ -6,6 +6,35 @@
 
 #include "common.h"
 
+int memcmppos(void* inl, void* inr, int len){
+	int rem = len;
+	while(rem>8){
+		if ( *(uint64_t*)inl != *(uint64_t*)inr ){
+			break;
+		}
+		(uint64_t*)inl ++;
+		(uint64_t*)inr ++;
+		rem -= 8;
+	}
+	while(rem>4){
+		if ( *(uint32_t*)inl != *(uint32_t*)inr ){
+			break;
+		}
+		(uint32_t*)inl ++;
+		(uint32_t*)inr ++;
+		rem -= 4;
+	}
+	while(rem>1){
+		if ( *(uint8_t*)inl != *(uint8_t*)inr ){
+			break;
+		}
+		(uint8_t*)inl ++;
+		(uint8_t*)inr ++;
+		rem --;
+	}
+	return len-rem;
+}
+
 // we need a helper function to convert hex to binary, this function is unsafe and slow, but very readable (write something better)
 void hex2bin(void* dest, const char* src)
 {
@@ -26,10 +55,21 @@ void hex2bin(void* dest, const char* src)
 	}
        
 }
+
+ 
+void bin2hex(char*out_p, unsigned char*in_p, int len)
+{
+	char * out_pp = out_p;
+	for (int i = 0; i < len; i++)
+	{
+		out_pp += sprintf(out_pp, "%02X", in_p[i]);
+	}
+}
+ 
  
  void hex_dump(void *data, size_t len) {
     unsigned char *chr = data;
-    for ( size_t pos = 0; pos < len; pos++, chr++ ) { printf("%02x ", *chr & 0xFF); }
+    for ( size_t pos = 0; pos < len; pos++, chr++ ) { printf("%02X ", *chr & 0xFF); }
 }
 
 // this function is mostly useless in a real implementation, were only using it for demonstration purposes
@@ -42,7 +82,7 @@ void hexdump(const char* header, const uint8_t* data, int len)
     c=0;
     while(c < len)
     {
-            printf("%.2x", data[c++]);
+            printf("%.2X", data[c++]);
     }
     printf("\n");
 }
