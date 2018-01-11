@@ -405,6 +405,7 @@ void load_lookup(int src_as_hex, int dest_as_hex, int print_progress)
     unsigned char key_buf[20];
     int res = art_tree_init(&t);
 	char *pubkey_hex_p, *balance_str_p;
+	char pubkey_hex[64];
 	float*balance_p = balances;
 	void* ret_p = NULL;
 	int src_key_length, dest_key_length;
@@ -426,7 +427,7 @@ void load_lookup(int src_as_hex, int dest_as_hex, int print_progress)
 				hex2bin(key_buf, pubkey_hex_p);
 			
 		}else{
-			pubkey_hex_p = malloc(32);		
+			pubkey_hex_p = pubkey_hex;		
 			bin2hex(pubkey_hex_p, linebuf, src_key_length);
 			if (dest_as_hex) 
 				bin2hex(key_buf, linebuf, src_key_length);
@@ -454,7 +455,6 @@ void load_lookup(int src_as_hex, int dest_as_hex, int print_progress)
 			//printf("ZeroBalance P:%p  Key: %s Balance: %6.4f\n", ret_p, pubkey_hex_p, *balance_p);
 		}
 		
-		if (pubkey_hex_p) free(pubkey_hex_p);
         line++;
 		balance_p++;
     }
@@ -463,21 +463,19 @@ void load_lookup(int src_as_hex, int dest_as_hex, int print_progress)
 
 }
 
-int verify_match(unsigned char * buf, unsigned char * privkey_p, unsigned char * pubkey_p, unsigned char * pubkey_hash_p, int best_match_len){
+int verify_match(unsigned char * privkey_p, unsigned char * buf, int best_match_len){
 	
-	uintptr_t val = (uintptr_t)art_search(&t, buf, 40);
+	uintptr_t val = (uintptr_t)art_search(&t, buf, 20);
 	if (val){
 		printf("FOUND!!!!!!!!!!!!!!!!!1\n");
 		hexdump("Private key    :", privkey_p, PRIVATE_KEY_LENGTH);
-		hexdump("Public key U   :", pubkey_p, PUBLIC_KEY_LENGTH);
-		hexdump("Pubkey Has160 U:", pubkey_hash_p, PUBLIC_KEY_HASH160_LENGTH);
+		//hexdump("Public key U   :", pubkey_p, PUBLIC_KEY_LENGTH);
+		hexdump("Pubkey Hash160:", buf, PUBLIC_KEY_HASH160_LENGTH);
 		printf("FOUND!!!!!!!!!!!!!!!!!1\n");
 		exit(EXIT_SUCCESS);
 	}
 	if(art_best_depth >= show_min_match){
-		printf("Match len=%d : ", art_best_depth);				
-		hexdump("Pubkey Has160 C : ", pubkey_hash_p, PUBLIC_KEY_HASH160_LENGTH);				
-		printf("\n");
+		printf("Match len=%d : ", art_best_depth); hexdump("Hash160 : ", buf, PUBLIC_KEY_HASH160_LENGTH);	printf("\n");
 		//exit(EXIT_SUCCESS);
 	}
 	return (art_best_depth > best_match_len) ? art_best_depth : best_match_len;
@@ -518,7 +516,7 @@ int main(int argc, char **argv) {
 
 	//Bitcoin test
 	bitcoin_check(ctx);
-	load_lookup(0);
+	load_lookup(1, 0, 0);
     ////////////////////////////////////////////////////////////////////////////////
     //                                Verification                                //
     ////////////////////////////////////////////////////////////////////////////////
@@ -671,15 +669,15 @@ int main(int argc, char **argv) {
 		for ( size_t b = 0; b < BATCH_SIZE; b++ ) {			
 			Hash_public_key(pubkeyhash_p, pubkey_p, PUBLIC_KEY_LENGTH);
 			
-			bin2hex(buf, pubkeyhash_p, 20);
-			best_match_length = verify_match((unsigned char*)buf, &privkeys[b*PRIVATE_KEY_LENGTH], pubkey_c_p, pubkeyhash_p, best_match_length);
+			//bin2hex(buf, pubkeyhash_p, 20);
+			best_match_length = verify_match(&privkeys[b*PRIVATE_KEY_LENGTH], pubkeyhash_p, best_match_length);
 			pubkeyhash_p += PUBLIC_KEY_HASH160_LENGTH;
 			memcpy(pubkey_c_p, pubkey_p, PUBLIC_COMPRESSED_KEY_LENGTH);
 			pubkey_c_p[0] = 0x02 | (pubkey_p[64] & 0x01);
 			Hash_public_key(pubkeyhash_p, pubkey_c_p, PUBLIC_COMPRESSED_KEY_LENGTH);
 
-			bin2hex(buf, pubkeyhash_p, 20);
-			best_match_length = verify_match((unsigned char*)buf, &privkeys[b*PRIVATE_KEY_LENGTH], pubkey_c_p, pubkeyhash_p, best_match_length);
+			//bin2hex(buf, pubkeyhash_p, 20);
+			best_match_length = verify_match(&privkeys[b*PRIVATE_KEY_LENGTH], pubkey_c_p, best_match_length);
 			
 			pubkeyhash_p += PUBLIC_KEY_HASH160_LENGTH;
 			pubkey_c_p += PUBLIC_COMPRESSED_KEY_LENGTH;
