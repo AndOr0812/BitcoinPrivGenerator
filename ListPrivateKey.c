@@ -7,24 +7,23 @@ gcc -Wno-unused-function -O2 -march=native -I ../lib/secp256k1_fast_unsafe/ List
 gcc -Wno-unused-function -O2 -march=native -I ../lib/secp256k1_fast_unsafe/ ListPrivateKey.c common.c timer.c RIPEMD160.c ../lib/sha256_asm/sha256-x8664.S -lgmp -lart -o goArt
 */
 
-#include "RIPEMD160.h"
-#include "common.h"
-#include "art.h"
-//#include "sha256.h"
-//#include "sha256-ref.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "timer.h"
-
 #define HAVE_CONFIG_H
 #include "src/libsecp256k1-config.h"
 #include "src/secp256k1.c"
 #include "src/ecmult_big_impl.h"
 #include "src/secp256k1_batch_impl.h"
+
+#include "RIPEMD160.h"
+#include "common.h"
+#include "art.h"
+#include "timer.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <fcntl.h> // for open
 #include <unistd.h> // for close
+
 
 #define BATCH_SIZE 256
 #define PRIVATE_KEY_LENGTH 32
@@ -48,7 +47,6 @@ extern int art_best_depth;
 
 
 
-const uint64_t max_dump_size = 40000000000;
 const char privkeyhex[256] = "000000006a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321731";
 const unsigned int bmul_size  = 20;    // ecmult_big window size in bits
 char UTXO_filename[] = "/home/malego/Projects/Bitcoin/UTXO.txt";
@@ -209,29 +207,6 @@ int open_outfile(char* filename)
 	return fileDump;
 }
 
-static inline void incr_256bit(uint64_t* p_data, int qty)
-{
-	//printf("Increment\n");
-	p_data[0] += qty;
-	if (p_data[0] == 0)
-	{
-		p_data[1] += qty;
-		if (p_data[1] == 0)
-		{
-			p_data[2] += qty;
-			if (p_data[2] == 0)
-			{
-				p_data[3] += qty;
-				if (p_data[3] == 0)
-				{
-					printf("Msg wrap around");
-					exit(0);
-				}
-			}
-		}		
-	}
-	
-}
 
 // Call with a priv_key_hex first to init the function
 // Subsequent call should have NULL priv_key_hex so it generate a new incremented privkey
@@ -259,39 +234,41 @@ static inline void generate_privkey(uint64_t *privkey_out, const char *privkeyhe
 
  // Call with a priv_key_hex first to init the function
 // Subsequent call should have NULL priv_key_hex so it generate a new incremented privkey
-static inline void generate_privkey_from_file(uint64_t *privkey_out, int command, int batch_size)
+static inline void generate_privkey_from_file(uint64_t *privkey_out, uint64_t start_offset, int batch_size)
 {
-	static FILE * fin;
+	static FILE * fin = NULL;
     char * line = NULL;
     size_t buflen ;
     ssize_t read;
-
-	switch(command){
-		case 0:
-			fin = fopen("/home/malego/Downloads/crackstation.txt", "r");
-			if (fin == NULL){
-				printf("Error opening file\n");
+	int ret;
+	if (!fin){
+		fin = fopen("/home/malego/Downloads/crackstation.txt", "r");
+		if (fin == NULL){
+			printf("Error opening file\n");
+			exit(EXIT_FAILURE);
+		}
+		printf("Starting at offset %ul
+		ret = fseek(fin, start_offset, SEEK_SET);
+		return;
+	}
+	
+	if (privkey_out != NULL){
+		for (int i=0 ; i<batch_size ; i++)
+		{
+			read = getline(&line, &buflen, fin);
+			if (read == -1){
+				printf("End of file");
 				exit(EXIT_FAILURE);
 			}
-			break;
-		case 1:
-			for (int i=0 ; i<batch_size ; i++)
-			{
-				read = getline(&line, &buflen, fin);
-				if (read == -1){
-					printf("End of file");
-					exit(EXIT_FAILURE);
-				}
-				//printf("Retrieved read %ld length %zu : %s", read, buflen, line);
-				sha256_hash_message(line, read-1, (unsigned int *)&privkey_out[i*4]);
-			}
-			free(line);
-			break;
-		default:
-			fclose(fin);
-			if (line)
-				free(line);
+			//printf("Retrieved read %ld length %zu : %s", read, buflen, line);
+			sha256_hash_message(line, read-1, (unsigned int *)&privkey_out[i*4]);
+		}
+		free(line);
+		return;
 	}
+	
+	fclose(fin);
+
 }
 
 int bitcoin_check(secp256k1_context* ctx)
@@ -411,7 +388,7 @@ void load_lookup(int src_as_hex, int dest_as_hex, int print_progress)
 	int src_key_length, dest_key_length;
 	
     FILE *f = fopen(UTXO_filename, "r");
-
+	printf("Loading lookup table from file %s in %s mode.\n", UTXO_filename, (src_as_hex) ? "Hexa String" : "Byte String");
     uintptr_t line = 1;
     while (fgets(linebuf, sizeof linebuf, f)) {
 		src_key_length = (src_as_hex) ? 40 : 20;
@@ -482,6 +459,10 @@ int verify_match(unsigned char * privkey_p, unsigned char * buf, int best_match_
 }
 
 int main(int argc, char **argv) {
+	uint64_t max_dump_size = 0;
+	int max_iter_qty = 0;
+	uint64_t input_file_start_offset = 10000000000;
+	
 	if (argc>1)show_min_match = atoi(argv[1]);
     struct timespec clock_start;
     double clock_diff;
@@ -489,7 +470,7 @@ int main(int argc, char **argv) {
     printf("bmul  size = %u\n", bmul_size);
     printf("\n");
 
-	// test_sha256
+	// SHA256 self-check
 	if (!sha256_self_check()) {
 		printf("Self-check failed\n");
 		return EXIT_FAILURE;
@@ -649,12 +630,12 @@ int main(int argc, char **argv) {
 
 	//generate_privkey((uint64_t*)privkeys, privkeyhex, BATCH_SIZE);
 	printf("Opening read file\n");
-	generate_privkey_from_file((uint64_t*)privkeys, 0, BATCH_SIZE);
+	generate_privkey_from_file(NULL, input_file_start_offset, BATCH_SIZE);
 	printf("getting 256 keys\n");
-	generate_privkey_from_file((uint64_t*)privkeys, 1, BATCH_SIZE);
+	generate_privkey_from_file((uint64_t*)privkeys, 0, BATCH_SIZE);
 	printf("Crunching now\n");
     clock_start = get_clock();
-    while(file_dump_size < max_dump_size)
+    while(1)
 	{
         // Generate associated public keys
         // Wrapped in if to prevent "ignoring return value" warning
@@ -714,13 +695,16 @@ int main(int argc, char **argv) {
 			previter = iter;
 		}
 		
+		if (max_dump_size && (file_dump_size < max_dump_size)) break;
+		if (max_iter_qty && (iter >= max_iter_qty)) break;
+		
 		// Generate batch of private keys
-		generate_privkey_from_file((uint64_t*)privkeys, 1, BATCH_SIZE);
+		generate_privkey_from_file((uint64_t*)privkeys, 0, BATCH_SIZE);
 		//generate_privkey((uint64_t*)privkeys, NULL, BATCH_SIZE);
 		iter+=BATCH_SIZE;
     }
 	printf("Best match length = %d\n.", best_match_length);
-	generate_privkey_from_file((uint64_t*)privkeys, 2, BATCH_SIZE);
+	generate_privkey_from_file(NULL, 0, BATCH_SIZE);
 	free(publicKeys_hash);
 	close(fileDump);
     return 0;

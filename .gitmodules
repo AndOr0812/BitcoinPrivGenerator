@@ -1,0 +1,9 @@
+[submodule "mylibc"]
+	path = mylibc
+	url = https://github.com/maleg/mylibc
+[submodule "libart"]
+	path = libart
+	url = https://github.com/maleg/libart
+[submodule "secp256k1_fast_unsafe"]
+	path = secp256k1_fast_unsafe
+	url = https://github.com/maleg/secp256k1_fast_unsafe
