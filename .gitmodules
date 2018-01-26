@@ -7,3 +7,9 @@
 [submodule "secp256k1_fast_unsafe"]
 	path = secp256k1_fast_unsafe
 	url = https://github.com/maleg/secp256k1_fast_unsafe
+[submodule "libbase58"]
+	path = libbase58
+	url = https://github.com/maleg/libbase58
+[submodule "sha256_asm"]
+	path = sha256_asm
+	url = https://github.com/maleg/sha256_asm
